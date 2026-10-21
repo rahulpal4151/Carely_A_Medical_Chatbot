@@ -1,8 +1,9 @@
-from langchain.document_loaders import PyPDFLoader, DirectoryLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import HuggingFaceEmbeddings
+import hashlib
+from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from typing import List
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 
 #Extract Data From the PDF File
@@ -24,14 +25,41 @@ def filter_to_minimal_docs(docs: List[Document]) -> List[Document]:
     """
     minimal_docs: List[Document] = []
     for doc in docs:
-        src = doc.metadata.get("source")
+        metadata = {"source": doc.metadata.get("source")}
+        for key in ("page", "page_label"):
+            if key in doc.metadata:
+                metadata[key] = doc.metadata[key]
         minimal_docs.append(
             Document(
                 page_content=doc.page_content,
-                metadata={"source": src}
+                metadata=metadata
             )
         )
     return minimal_docs
+
+
+def prepare_documents_for_indexing(docs: List[Document]) -> tuple[List[Document], List[str]]:
+    unique_docs: List[Document] = []
+    ids: List[str] = []
+    seen_ids = set()
+
+    for doc in docs:
+        identity = "\0".join(
+            (
+                str(doc.metadata.get("source", "")),
+                str(doc.metadata.get("page", "")),
+                doc.page_content,
+            )
+        )
+        doc_id = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+        if doc_id in seen_ids:
+            continue
+
+        seen_ids.add(doc_id)
+        unique_docs.append(doc)
+        ids.append(doc_id)
+
+    return unique_docs, ids
 
 
 

@@ -1,6 +1,12 @@
 from dotenv import load_dotenv
 import os
-from src.helper import load_pdf_file, filter_to_minimal_docs, text_split, download_hugging_face_embeddings
+from src.helper import (
+    download_hugging_face_embeddings,
+    filter_to_minimal_docs,
+    load_pdf_file,
+    prepare_documents_for_indexing,
+    text_split,
+)
 from pinecone import Pinecone
 from pinecone import ServerlessSpec 
 from langchain_pinecone import PineconeVectorStore
@@ -8,16 +14,18 @@ from langchain_pinecone import PineconeVectorStore
 load_dotenv()
 
 
-PINECONE_API_KEY=os.environ.get('PINECONE_API_KEY')
-OPENAI_API_KEY=os.environ.get('OPENAI_API_KEY')
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+
+if not PINECONE_API_KEY:
+    raise ValueError("PINECONE_API_KEY .env file mein missing hai")
 
 os.environ["PINECONE_API_KEY"] = PINECONE_API_KEY
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
 
 extracted_data=load_pdf_file(data='data/')
 filter_data = filter_to_minimal_docs(extracted_data)
 text_chunks=text_split(filter_data)
+text_chunks, vector_ids = prepare_documents_for_indexing(text_chunks)
 
 embeddings = download_hugging_face_embeddings()
 
@@ -42,5 +50,6 @@ index = pc.Index(index_name)
 docsearch = PineconeVectorStore.from_documents(
     documents=text_chunks,
     index_name=index_name,
-    embedding=embeddings, 
+    embedding=embeddings,
+    ids=vector_ids,
 )
